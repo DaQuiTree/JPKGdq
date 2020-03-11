@@ -1,0 +1,396 @@
+#!/bin/bash
+
+# Brief : 一个用于tar包替换的脚本
+# Auther: DaQui
+# Date: 2020/3/3 
+
+user_manual(){
+    echo "Usage: JPKG  "
+    echo "       -s [target]        start to generate target"
+    echo "       -t [file.tar.gz]   set model tarball"
+    echo "       -a [file]          add/replace file"
+    echo "       -r [file]          remove file"
+    echo "       -l                 show prepare list"
+    echo "       -e                 empty prepare list"
+}
+
+#红色字 
+r1="\033[31;1m"
+r2="\033[0m" 
+#绿色字 
+g1="\033[32;1m"
+g2="\033[0m" 
+#黄色字 
+y1="\033[33;1m"
+y2="\033[0m" 
+#蓝色字 
+b1="\033[34;1m"
+b2="\033[0m"
+
+#path declare
+JG5PATH=3536_app
+INSTALLPATH=/usr/local/JPKG_pkg
+ROOTPATH=$INSTALLPATH
+TARBALLPATH=$ROOTPATH/lastTarball
+WORKSPACE=$TARBALLPATH/.workspace
+TERMINALPATH=$WORKSPACE/$JG5PATH
+USERPATH=$(pwd)
+
+CHANGELIST=$TARBALLPATH/.change_list
+REMOVELIST=$TARBALLPATH/.remove_list
+CHANGEREPORT=$WORKSPACE/.change_report
+NEWREPORT=$WORKSPACE/.add_report
+REMOVEREPORT=$WORKSPACE/.remove_report
+
+BINNAME=${0#*/}
+if [ ! -d $INSTALLPATH ]; then
+    if [ $# -ne 1 -a "$1" != "install" ]; then
+        echo -e "Need to install: sudo ./JPKG install"
+        exit 1
+    fi
+fi
+
+if [ $# -lt 1 ]; then
+    user_manual
+    exit 1
+fi
+
+
+#update change list
+add_change_list(){
+    #check fisrt character
+    cap=$(echo $2 | cut -c 1)
+    if [ "$cap" != '/' ]; then
+        chpath=$(pwd)/$2 #relative path
+    else
+        chpath=$2 #absolute path
+    fi
+
+    #check last character
+    last=${chpath: -1}
+    if [ "$last" = '/' ];then
+        chpath=${chpath%?}
+    fi
+
+    #alread have?
+    cat $CHANGELIST | grep $chpath > /dev/null 2>&1
+    if [ "$?" = "0"];then
+        return;
+    fi
+
+    if [ -d $chpath ];then
+        echo ${chpath}/ >> $CHANGELIST
+        exit 0
+    elif [ -f $chpath ];then
+        echo $chpath >> $CHANGELIST
+        exit 0
+    else
+        echo -e "$r1 file doesn't exist. $r2"
+        exit 1
+    fi
+}
+
+#Install 
+install_jpkg(){
+    mkdir -p $INSTALLPATH/lastTarball
+    chmod 777 $INSTALLPATH/lastTarball 
+    cp $(pwd)/$1 $INSTALLPATH
+    ln -s $INSTALLPATH/$1 /usr/local/bin/$1
+}
+
+#update remove list
+add_remove_list(){
+    #need only filename
+    echo $2 | grep '/' > /dev/null
+    if [ $? == '0' ]; then
+        echo -e "$y1 only need filename. $y2"
+        exit 1
+    fi
+
+    #alread have?
+    cat $REMOVELIST | grep $2 > /dev/null 2>&1
+    if [ "$?" = "0"];then
+        return;
+    fi
+
+    #check model tarball exists
+    ls $TARBALLPATH/*.tar.gz >/dev/null 2>&1
+    if [ $? != '0' ]; then
+        echo -e "$y1 no model tarball was set. $y2"
+        exit 1
+    fi
+
+    #find whether file is in model tarball
+    tar -tf $TARBALLPATH/*.tar.gz | grep "/$2" > /dev/null 2>&1 #match dir
+    if [ $? != '0' ]; then
+        echo -e "$r1 file not exists. $r2"
+        exit 1
+    fi
+
+    tar -tf $TARBALLPATH/*.tar.gz | grep "/$2" | head -n 1 >> $REMOVELIST
+
+    exit 0;
+}
+
+#copy model tar file
+copy_model_tar(){
+    cap=$(echo $2 | cut -c 1)
+    if [ $cap != '/' ]; then
+        tarpath=$(pwd)/$2 #relative path
+    else
+        tarpath=$2 #absolute path
+    fi
+    tar -tf $tarpath >/dev/null 2>&1
+    if [ $? = '0' ]; then
+        rm -rf $TARBALLPATH/*.tar.gz
+        cp $tarpath $TARBALLPATH
+        exit 0
+    else
+        echo -e "$r1 bad file. $r2"
+        exit 1
+    fi
+}
+
+#show list
+show_prepare_list(){
+    clear
+    echo
+    echo -e "<$g1 Model$g2 >"
+    cd $TARBALLPATH
+    ls *.tar.gz
+    echo
+
+    echo -e "<$y1 replace$y2 >"
+    cat $CHANGELIST 2>/dev/null
+    echo
+
+    echo -e "<$r1 remove$r2 >"
+    cat $REMOVELIST 2>/dev/null
+
+    echo
+    echo
+}
+
+prase_cmdline(){
+    if [ $# -eq 2 ]; then
+        if [ $1 = "-a" ]; then
+            add_change_list $1 $2
+        elif [ $1 = '-r' ]; then
+            add_remove_list $1 $2
+        elif [ $1 = "-t" ]; then
+            copy_model_tar $1 $2
+        elif [ $1 = '-s' ]; then
+            #target is empty
+            if [ "$2" = "" ];then
+                echo -e "$r1 bad target name. $r2"
+                exit 1
+            fi
+
+            #ensure
+            show_prepare_list
+            read -p "You sure? (Y)es  " bsure
+            if [ "$bsure" != 'Y' ];then
+                echo -e "cancel."
+                exit 0
+            fi
+            return
+        else
+            echo -e "$r1 bad command. $r2"
+            exit 1;
+        fi
+    elif [ $# -eq 1 ]; then
+        if [ $1 = '-l' ]; then
+            show_prepare_list
+        elif [ $1 = '-e' ]; then
+            rm -rf $CHANGELIST $REMOVELIST
+        elif [ $1 = 'install' ]; then
+            install_jpkg $BINNAME
+        else
+            echo -e "$r1 bad command. $r2"
+            user_manual
+            exit 1;
+        fi
+    else
+        echo -e "$r1 bad command. $r2"
+        user_manual
+        exit 1;
+    fi
+
+    exit 0
+}
+
+prase_cmdline $1 $2
+
+#target
+TARGETNAME=$2
+
+clear_temps(){
+    rm -rf $WORKSPACE $CHANGELIST $REMOVELIST
+}
+
+#prepare
+clear
+echo
+rm -rf $WORKSPACE
+mkdir $WORKSPACE
+
+#unzip
+tar xvf $TARBALLPATH/*.tar.gz -C $WORKSPACE >/dev/null 2>&1
+if [ $? != 0 ];then
+    echo -e "No tarball find in$r1 $TARBALLPATH. $r2"
+    exit 1
+fi
+
+chCnt='0'
+newCnt='0'
+removeCnt='0'
+choice="Yes"
+
+insert_file(){
+    echo -e "Have not locate <$y1$1$y2>, want to insert? (I)gnore (Q)uit " 
+    read choice
+    accpath=""
+    while :
+    do
+        if [ "$choice" = "Q" ];then
+            clear_temps
+            echo -e "$r1 abort.$r2"
+            exit 1
+        fi
+        if [ "$choice" = "I" ];then
+            echo -e "$y1 ignored.$y2"
+            return;
+        fi
+        clear
+        echo
+        echo -e "Insert <$y1$1$y2>: enter $r1..$r2 to go back"
+        if [ -d ${TERMINALPATH}/$accpath/$choice ];then
+            lastpath=$accpath
+            accpath=${accpath}/$choice
+            tree -ad --noreport -L 1 ${TERMINALPATH}/$accpath
+            read -p "Your path: (I)gnore (Q)uit " choice
+            echo
+            if [ "$choice" = "" ]; then
+                break;
+            fi
+        else
+            echo -e "$r1 invalid directory.$r2"
+            tree -ad --noreport -L 1 ${TERMINALPATH}/$accpath
+            read -p "Your path: (I)gnore (Q)uit " choice
+            echo
+            continue
+        fi
+    done
+
+    cp -pr $2 ${TERMINALPATH}/$accpath/$1
+    newCnt=$(expr $newCnt + 1)
+    if [ -f ${TERMINALPATH}/$accpath/$1 ];then
+        echo -e "  file: $b1$1$b2" >> $NEWREPORT
+        echo -e "  attr: $(ls -l ${TERMINALPATH}/$accpath/$1| cut -d ' ' -f 1,5-9)" >> $NEWREPORT
+        echo -e "   MD5: $(md5sum ${TERMINALPATH}/$accpath/$1| cut -d ' ' -f1) \n" >> $NEWREPORT
+    elif [ -d ${TERMINALPATH}/$accpath/$1 ];then
+        echo -e "   dir: $y1$1$y2" >> $NEWREPORT
+        echo -e "  attr: $(ls -dl ${TERMINALPATH}/$accpath/$1| cut -d ' ' -f 1,5-9)\n" >> $NEWREPORT
+    fi
+}
+
+file_recover(){
+    goalpath=$(find $TERMINALPATH -name "$1" -a \( -type f -o -type d -o -type l \) | head -n 1)
+    if [ "$goalpath" != "" ]; then #file exists
+        rm -rf $goalpath
+        cp -pr $2 $goalpath
+        chCnt=$(expr $chCnt + 1)
+        if [ -f $goalpath ];then
+            echo -e "   file: $b1$1$b2" >> $CHANGEREPORT
+            echo -e "   attr: $(ls -l $goalpath| cut -d ' ' -f 1,5-9)" >> $CHANGEREPORT
+            echo -e "    MD5: $(md5sum $goalpath| cut -d ' ' -f1) \n" >> $CHANGEREPORT
+        elif [ -d $goalpath ];then
+            echo -e "    dir: $y1$1$y2" >> $CHANGEREPORT
+            echo -e "   attr: $(ls -dl $goalpath| cut -d ' ' -f 1,5-9)\n" >> $CHANGEREPORT
+        fi
+    else #file not exist
+        insert_file $1 $2
+    fi
+}
+
+#iterate dir:changes
+if [ -f $CHANGELIST ];then
+    set $(cat $CHANGELIST)
+    while [ "$1" != "" ];do
+        #check last character
+        fpath="$1"
+        last=${fpath: -1}
+        if [ "$last" = '/' ];then
+            fpath=${fpath%?}
+        fi
+
+        #get file name
+        fname=${fpath##*/}
+
+        #iterator
+        if [ "$fname" != "." -a "$fname" != ".." ];then
+            file_recover $fname $fpath
+        fi
+        shift
+    done;
+
+fi
+
+#iterate dir:remove
+if [ -f $REMOVELIST ];then
+    set $(cat $REMOVELIST)
+    while [ "$1" != "" ];do
+        #iterator
+        if [ -e ${WORKSPACE}/$1 ];then
+            bfile='0'
+            if [ -f ${WORKSPACE}/$1 ];then
+                bfile='1'
+            fi
+
+            rm -rf ${WORKSPACE}/$1
+            if [ $? = '0' ];then
+                removeCnt=$(expr $removeCnt + 1)
+                if [ "$bfile" = "1" ];then
+                    echo -e "   file: $b1$1$b2" >> $REMOVEREPORT
+                else
+                    echo -e "    dir: $y1$1$y2" >> $REMOVEREPORT
+                fi
+            fi
+        fi
+        shift
+    done;
+fi
+
+
+cd $ROOTPATH
+
+VERSIONPATH=$TERMINALPATH/appConfig/app_version
+echo APP_VERSION=${TARGETNAME} > $VERSIONPATH
+echo APP_DATE=$(date "+%Y-%m-%d") >> $VERSIONPATH
+
+#summery:
+clear
+echo
+echo -e "$g1$(cat $VERSIONPATH)$g2"
+echo -e "replace $r1$chCnt$r2 files\n"
+cat $CHANGEREPORT 2>/dev/null
+
+echo
+echo -e "add $r1$newCnt$r2 files.\n"
+cat $NEWREPORT 2>/dev/null
+
+echo
+echo -e "remove $r1$removeCnt$r2 files/directories.\n"
+cat $REMOVEREPORT 2>/dev/null 
+
+read -p "Are you sure? (N)o:  " bsure
+if [ "$bsure" != "N" ];then
+    cd $WORKSPACE
+    tar -zcvf $TARGETNAME.tar.gz * >/dev/null 2>&1
+    mv $TARGETNAME.tar.gz $USERPATH/
+    echo -e "$g1 succeed$g2.\n"
+fi
+
+clear_temps
+
+exit 0
