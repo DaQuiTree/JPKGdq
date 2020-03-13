@@ -6,10 +6,10 @@
 
 user_manual(){
     echo "Usage: JPKG  "
-    echo "       -s [target]        start to generate target"
-    echo "       -t [file.tar.gz]   set model tarball"
-    echo "       -a [file]          add/replace file"
-    echo "       -r [file]          remove file"
+    echo "       -s/S [target]        start to generate target"
+    echo "       -t   [file.tar.gz]   set model tarball"
+    echo "       -a   [file]          add/replace file"
+    echo "       -r   [file]          remove file"
     echo "       -l                 show prepare list"
     echo "       -e                 empty prepare list"
 }
@@ -73,8 +73,8 @@ add_change_list(){
     fi
 
     #alread have?
-    cat $CHANGELIST | grep $chpath > /dev/null 2>&1
-    if [ "$?" = "0"];then
+    cat $CHANGELIST 2>/dev/null | grep -w $chpath > /dev/null 2>&1
+    if [ "$?" = "0" ];then
         return;
     fi
 
@@ -108,8 +108,8 @@ add_remove_list(){
     fi
 
     #alread have?
-    cat $REMOVELIST | grep $2 > /dev/null 2>&1
-    if [ "$?" = "0"];then
+    cat $REMOVELIST 2>/dev/null | grep -w $2 > /dev/null 2>&1
+    if [ "$?" = "0" ];then
         return;
     fi
 
@@ -121,13 +121,13 @@ add_remove_list(){
     fi
 
     #find whether file is in model tarball
-    tar -tf $TARBALLPATH/*.tar.gz | grep "/$2" > /dev/null 2>&1 #match dir
+    tar -tf $TARBALLPATH/*.tar.gz | grep -w "/$2" > /dev/null 2>&1 #match dir
     if [ $? != '0' ]; then
-        echo -e "$r1 file not exists. $r2"
+        echo -e "$r1 file doesn't exists. $r2"
         exit 1
     fi
 
-    tar -tf $TARBALLPATH/*.tar.gz | grep "/$2" | head -n 1 >> $REMOVELIST
+    tar -tf $TARBALLPATH/*.tar.gz | grep -w "/$2" | head -n 1 >> $REMOVELIST
 
     exit 0;
 }
@@ -142,6 +142,7 @@ copy_model_tar(){
     fi
     tar -tf $tarpath >/dev/null 2>&1
     if [ $? = '0' ]; then
+        rm -rf $WORKSPACE $CHANGELIST $REMOVELIST > /dev/null 2>&1
         rm -rf $TARBALLPATH/*.tar.gz
         cp $tarpath $TARBALLPATH
         exit 0
@@ -179,7 +180,7 @@ prase_cmdline(){
             add_remove_list $1 $2
         elif [ $1 = "-t" ]; then
             copy_model_tar $1 $2
-        elif [ $1 = '-s' ]; then
+        elif [ $1 = '-s' -o $1 = '-S' ]; then
             #target is empty
             if [ "$2" = "" ];then
                 echo -e "$r1 bad target name. $r2"
@@ -222,6 +223,11 @@ prase_cmdline(){
 prase_cmdline $1 $2
 
 #target
+bSpecificTarball=1
+if [ $1 = '-S' ]; then
+    bSpecificTarball=0 #is common tarball
+    TERMINALPATH=$WORKSPACE
+fi
 TARGETNAME=$2
 
 clear_temps(){
@@ -364,14 +370,18 @@ fi
 
 cd $ROOTPATH
 
-VERSIONPATH=$TERMINALPATH/appConfig/app_version
-echo APP_VERSION=${TARGETNAME} > $VERSIONPATH
-echo APP_DATE=$(date "+%Y-%m-%d") >> $VERSIONPATH
+if [ $bSpecificTarball = "1" ]; then
+    VERSIONPATH=$TERMINALPATH/appConfig/app_version
+    echo APP_VERSION=$TARGETNAME > $VERSIONPATH
+    echo APP_DATE=$(date "+%Y-%m-%d") >> $VERSIONPATH
+fi
 
 #summery:
 clear
 echo
-echo -e "$g1$(cat $VERSIONPATH)$g2"
+if [ $bSpecificTarball = "1" ]; then
+    echo -e "$g1$(cat $VERSIONPATH)$g2"
+fi
 echo -e "replace $r1$chCnt$r2 files\n"
 cat $CHANGEREPORT 2>/dev/null
 
