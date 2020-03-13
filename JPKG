@@ -66,16 +66,21 @@ add_change_list(){
         chpath=$2 #absolute path
     fi
 
+    #alread have?
+    if [ -f $CHANGELIST ];then
+        set $(cat $CHANGELIST)
+        while [ "$1" != "" ];do
+            if [ "$chpath" = "$1" ];then
+                return
+            fi
+            shift
+        done;
+    fi
+
     #check last character
     last=${chpath: -1}
     if [ "$last" = '/' ];then
         chpath=${chpath%?}
-    fi
-
-    #alread have?
-    cat $CHANGELIST 2>/dev/null | grep -w $chpath > /dev/null 2>&1
-    if [ "$?" = "0" ];then
-        return;
     fi
 
     if [ -d $chpath ];then
@@ -107,11 +112,7 @@ add_remove_list(){
         exit 1
     fi
 
-    #alread have?
-    cat $REMOVELIST 2>/dev/null | grep -w $2 > /dev/null 2>&1
-    if [ "$?" = "0" ];then
-        return;
-    fi
+    rmName=$2
 
     #check model tarball exists
     ls $TARBALLPATH/*.tar.gz >/dev/null 2>&1
@@ -120,14 +121,25 @@ add_remove_list(){
         exit 1
     fi
 
+    #alread have?
+    if [ -f $REMOVELIST ];then
+        set $(cat $REMOVELIST)
+        while [ "$1" != "" ];do
+            if [ "$rmName" = "$1" ];then
+                return
+            fi
+            shift
+        done;
+    fi
+
     #find whether file is in model tarball
-    tar -tf $TARBALLPATH/*.tar.gz | grep -w "/$2" > /dev/null 2>&1 #match dir
+    tar -tf $TARBALLPATH/*.tar.gz | grep -w "$rmName" > /dev/null 2>&1 #match dir
     if [ $? != '0' ]; then
         echo -e "$r1 file doesn't exists. $r2"
         exit 1
     fi
 
-    tar -tf $TARBALLPATH/*.tar.gz | grep -w "/$2" | head -n 1 >> $REMOVELIST
+    tar -tf $TARBALLPATH/*.tar.gz | grep -w "$rmName" | head -n 1 >> $REMOVELIST
 
     exit 0;
 }
