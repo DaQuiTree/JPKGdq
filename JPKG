@@ -105,15 +105,6 @@ install_jpkg(){
 
 #update remove list
 add_remove_list(){
-    #need only filename
-    echo $2 | grep '/' > /dev/null
-    if [ $? == '0' ]; then
-        echo -e "$y1 only need filename. $y2"
-        exit 1
-    fi
-
-    rmName=$2
-
     #check model tarball exists
     ls $TARBALLPATH/*.tar.gz >/dev/null 2>&1
     if [ $? != '0' ]; then
@@ -121,11 +112,25 @@ add_remove_list(){
         exit 1
     fi
 
+    #directory?
+    bDir=0
+    last=${2: -1}
+    if [ "$last" = '/' ];then
+        fileName=${2%?}
+        [ $(echo $fileName | grep '/') ] && echo -e "$y1 only need direcory name ig:lib/ $y2" && exit 1
+        bDir=1
+    else
+        fileName=$2
+        [ $(echo $2| grep '/') ] && echo -e "$y1 only need file name ig:a.out $y2" && exit 1
+    fi
+
     #alread have?
     if [ -f $REMOVELIST ];then
         set $(cat $REMOVELIST)
         while [ "$1" != "" ];do
-            if [ "$rmName" = "$1" ];then
+            cmpobj=$1
+            [ "$bDir" = "1" ] && cmpobj=${1%/*}
+            if [ "$fileName" = "${cmpobj##*/}" ];then
                 return
             fi
             shift
@@ -133,15 +138,27 @@ add_remove_list(){
     fi
 
     #find whether file is in model tarball
-    tar -tf $TARBALLPATH/*.tar.gz | grep -w "$rmName" > /dev/null 2>&1 #match dir
-    if [ $? != '0' ]; then
-        echo -e "$r1 file doesn't exists. $r2"
+    if [ $bDir = "1" ];then
+        filePath=$(tar -tf $TARBALLPATH/*.tar.gz | grep "$fileName/" | head -n 1) 
+        if [ $filePath != "" ];then
+            echo $filePath >> $REMOVELIST
+            exit 0
+        fi
+        echo -e "$r1 dir doesn't exists. $r2"
         exit 1
     fi
 
-    tar -tf $TARBALLPATH/*.tar.gz | grep -w "$rmName" | head -n 1 >> $REMOVELIST
+    set $(tar -tf $TARBALLPATH/*.tar.gz | grep -w "$fileName")
+    while [ "$1" != "" ];do
+        if [ "$fileName" = "${1##*/}" ];then
+            echo $1 >> $REMOVELIST
+            exit 0
+        fi
+        shift
+    done;
 
-    exit 0;
+    echo -e "$r1 file doesn't exists. $r2"
+    exit 1
 }
 
 #copy model tar file
@@ -394,11 +411,11 @@ echo
 if [ $bSpecificTarball = "1" ]; then
     echo -e "$g1$(cat $VERSIONPATH)$g2"
 fi
-echo -e "replace $r1$chCnt$r2 files\n"
+echo -e "replace $r1$chCnt$r2 files/directories\n"
 cat $CHANGEREPORT 2>/dev/null
 
 echo
-echo -e "add $r1$newCnt$r2 files.\n"
+echo -e "add $r1$newCnt$r2 files/directories.\n"
 cat $NEWREPORT 2>/dev/null
 
 echo
