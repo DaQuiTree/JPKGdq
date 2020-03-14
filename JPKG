@@ -38,6 +38,7 @@ USERPATH=$(pwd)
 
 CHANGELIST=$TARBALLPATH/.change_list
 REMOVELIST=$TARBALLPATH/.remove_list
+ALIASLIST=$INSTALLPATH/.alias_list
 CHANGEREPORT=$WORKSPACE/.change_report
 NEWREPORT=$WORKSPACE/.add_report
 REMOVEREPORT=$WORKSPACE/.remove_report
@@ -148,14 +149,17 @@ add_remove_list(){
         exit 1
     fi
 
-    set $(tar -tf $TARBALLPATH/*.tar.gz | grep -w "$fileName")
-    while [ "$1" != "" ];do
-        if [ "$fileName" = "${1##*/}" ];then
-            echo $1 >> $REMOVELIST
-            exit 0
-        fi
-        shift
-    done;
+    listinfo=$(tar -tf $TARBALLPATH/*.tar.gz | grep -w "$fileName")
+    if [ "$listinfo" != "" ];then
+        set $listinfo
+        while [ "$1" != "" ];do
+            if [ "$fileName" = "${1##*/}" ];then
+                echo $1 >> $REMOVELIST
+                exit 0
+            fi
+            shift
+        done;
+    fi
 
     echo -e "$r1 file doesn't exists. $r2"
     exit 1
@@ -281,7 +285,30 @@ newCnt='0'
 removeCnt='0'
 choice="Yes"
 
+check_alias(){
+    aliasline=$(grep -v '#' $ALIASLIST | grep $1 | head -n 1 2>/dev/null)
+    if [ "$aliasline" != "" ];then
+       name=${aliasline##*=}
+       goalpath=$(find $TERMINALPATH -name "$name" -a \( -type f -o -type l \) | head -n 1)
+       if [ "$goalpath" != "" ]; then #file exists
+           rm -rf $goalpath
+           cp -pr $2 $goalpath
+           chCnt=$(expr $chCnt + 1)
+           echo -e "   file: $b1$name$b2" >> $CHANGEREPORT
+           echo -e "   attr: $(ls -l $goalpath| cut -d ' ' -f 1,5-9)" >> $CHANGEREPORT
+           echo -e "    MD5: $(md5sum $goalpath| cut -d ' ' -f1) \n" >> $CHANGEREPORT
+           echo "0"
+           return
+       fi
+    fi
+    echo "1"
+}
+
 insert_file(){
+    res=$(check_alias $1 $2)
+    if [ $res = "0" ];then
+        return
+    fi
     echo -e "Have not locate <$y1$1$y2>, want to insert? (I)gnore (Q)uit " 
     read choice
     accpath=""
