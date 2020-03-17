@@ -282,6 +282,7 @@ fi
 
 chCnt='0'
 newCnt='0'
+aliasCnt='0'
 removeCnt='0'
 choice="Yes"
 
@@ -293,7 +294,7 @@ check_alias(){
        if [ "$goalpath" != "" ]; then #file exists
            rm -rf $goalpath
            cp -pr $2 $goalpath
-           chCnt=$(expr $chCnt + 1)
+           aliasCnt=$(expr $aliasCnt + 1)
            echo -e "   file: $b1$name$b2" >> $CHANGEREPORT
            echo -e "   attr: $(ls -l $goalpath| cut -d ' ' -f 1,5-9)" >> $CHANGEREPORT
            echo -e "    MD5: $(md5sum $goalpath| cut -d ' ' -f1) \n" >> $CHANGEREPORT
@@ -362,13 +363,13 @@ file_recover(){
         rm -rf $goalpath
         cp -pr $2 $goalpath
         chCnt=$(expr $chCnt + 1)
-        if [ -f $goalpath ];then
+        if [ -d $goalpath ];then
+            echo -e "    dir: $y1$1$y2" >> $CHANGEREPORT
+            echo -e "   attr: $(ls -dl $goalpath| cut -d ' ' -f 1,5-9)\n" >> $CHANGEREPORT
+        elif [ -e $goalpath -o -L $goalpath ];then
             echo -e "   file: $b1$1$b2" >> $CHANGEREPORT
             echo -e "   attr: $(ls -l $goalpath| cut -d ' ' -f 1,5-9)" >> $CHANGEREPORT
             echo -e "    MD5: $(md5sum $goalpath| cut -d ' ' -f1) \n" >> $CHANGEREPORT
-        elif [ -d $goalpath ];then
-            echo -e "    dir: $y1$1$y2" >> $CHANGEREPORT
-            echo -e "   attr: $(ls -dl $goalpath| cut -d ' ' -f 1,5-9)\n" >> $CHANGEREPORT
         fi
     else #file not exist
         insert_file $1 $2
@@ -438,7 +439,8 @@ echo
 if [ $bSpecificTarball = "1" ]; then
     echo -e "$g1$(cat $VERSIONPATH)$g2"
 fi
-echo -e "replace $r1$chCnt$r2 files/directories\n"
+echo -e "replace $r1$(expr $aliasCnt + $chCnt)$r2 files/directories\n"
+        
 cat $CHANGEREPORT 2>/dev/null
 
 echo
